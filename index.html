@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/aframe-ar@0.8.3/dist/aframe-ar.min.js"></script>
+  </head>
+  <body>
+    <a-scene webxr="optionalFeatures: hit-test, planes;">
+      <a-assets>
+        <a-asset-item id="sirenhead-model" src="path/to/sirenhead.glb"></a-asset-item>
+      </a-assets>
+
+      <a-camera raycaster="objects: .clickable" cursor="fuse: false; rayOrigin: mouse;"></a-camera>
+
+      <a-entity id="monster-target" 
+                gltf-model="#sirenhead-model" 
+                scale="0.5 0.5 0.5" 
+                position="2 0 -5" 
+                class="clickable"
+                visible="true">
+      </a-entity>
+
+      <div style="position: fixed; top: 10px; width: 100%; text-align: center; z-index: 1000; color: white; font-family: sans-serif;">
+        <h1 id="status-text">HARI 1: TEMUKAN SIREN HEAD</h1>
+      </div>
+    </a-scene>
+
+    <script>
+      // Logika untuk mendeteksi jika monster "ditemukan" (diklik)
+      const monster = document.querySelector('#monster-target');
+      monster.addEventListener('click', function() {
+          alert('Monster Ditemukan! Menuju Hari Berikutnya...');
+          // Update database/localStorage untuk progres hari
+      });
+    </script>
+  </body>
+</html>
