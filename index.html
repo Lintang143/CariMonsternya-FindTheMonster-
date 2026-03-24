@@ -3,9 +3,9 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>GPS Haunted Forest - 5 Targets/Day</title>
+    <title>GPS Haunted Forest - Joystick Edition</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-look-controls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.9.1/nipplejs.min.js"></script>
     <style>
         body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; background: #050505; }
         
@@ -20,7 +20,6 @@
             box-shadow: 0 0 20px #f00;
         }
 
-        /* UI Game */
         .ui-overlay { 
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             pointer-events: none; z-index: 10; display: none; flex-direction: column; align-items: center; 
@@ -30,9 +29,13 @@
             padding: 15px; border: 2px solid #0f0; border-radius: 5px; text-align: center;
             pointer-events: auto; width: 85%;
         }
-        #distance-info { font-size: 1.2em; font-weight: bold; color: #f00; text-shadow: 0 0 10px #f00; }
         
-        /* Crosshair */
+        /* Joystick Container */
+        #joystick-zone {
+            position: fixed; bottom: 40px; left: 40px; width: 120px; height: 120px;
+            z-index: 100; pointer-events: auto;
+        }
+
         .crosshair {
             position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
             width: 40px; height: 40px; z-index: 100; pointer-events: none;
@@ -44,9 +47,9 @@
         .crosshair::after { left: 50%; top: 0; width: 2px; height: 100%; }
 
         .btn-capture {
-            position: fixed; bottom: 40px; padding: 20px 50px; 
+            position: fixed; bottom: 40px; right: 40px; padding: 25px; 
             background: radial-gradient(circle, #ff0000, #660000); color: white; 
-            border: 3px solid white; border-radius: 50px; font-weight: bold;
+            border: 3px solid white; border-radius: 50%; font-weight: bold;
             cursor: pointer; z-index: 100; pointer-events: auto; display: none;
         }
 
@@ -61,20 +64,20 @@
 <body>
     <div id="boot-screen">
         <h1 style="margin-bottom: 30px; letter-spacing: 3px;">HAUNTED FOREST</h1>
-        <p>Sistem membutuhkan GPS aktif & izin sensor gerak.</p>
-        <button class="btn-boot" onclick="requestGPSSystem()">AKTIFKAN SISTEM</button>
+        <p>Gunakan GPS atau Joystick untuk mendekati target.</p>
+        <button class="btn-boot" onclick="requestGPSSystem()">MULAI PERBURUAN</button>
     </div>
 
     <div class="ui-overlay" id="game-ui">
         <button class="btn-fullscreen" onclick="toggleFullScreen()">FULLSCREEN</button>
         <div class="status-panel">
-            <div id="day-text">HARI 1 - LVL 1</div>
+            <div id="day-text">HARI 1</div>
             <div id="distance-info">MENCARI SINYAL...</div>
             <div id="target-count">TARGET: 1/5</div>
         </div>
         
         <div class="crosshair"></div>
-        
+        <div id="joystick-zone"></div>
         <button id="btn-capture" class="btn-capture" onclick="attemptCapture()">TANGKAP!</button>
     </div>
 
@@ -83,18 +86,19 @@
             <img id="forest-360" src="https://live.staticflickr.com/65535/51230419355_09a47161b3_k.jpg" crossorigin="anonymous">
         </a-assets>
 
-        <a-sky id="background" src="#forest-360" rotation="0 -90 0"></a-sky>
+        <a-sky id="background" src="#forest-360"></a-sky>
         
         <a-entity id="monster-target" 
                   gltf-model="" 
                   scale="2 2 2" 
                   visible="false"
-                  class="targetable"
-                  animation="property: rotation; to: 0 360 0; loop: true; dur: 12000">
+                  class="targetable">
         </a-entity>
 
-        <a-entity camera look-controls>
-            <a-entity raycaster="objects: .targetable; far: 100" cursor="rayOrigin: mouse;"></a-entity>
+        <a-entity id="rig" position="0 0 0">
+            <a-entity camera look-controls position="0 1.6 0">
+                <a-entity raycaster="objects: .targetable; far: 100" cursor="rayOrigin: mouse;"></a-entity>
+            </a-entity>
         </a-entity>
     </a-scene>
 
@@ -104,16 +108,15 @@
         let lastDate = localStorage.getItem('monster_hunt_last_date');
         let dailyTargets = JSON.parse(localStorage.getItem('monster_hunt_targets')) || [];
         let capturedTodayCount = parseInt(localStorage.getItem('monster_hunt_captured_today')) || 0;
+        
         let userGPS = { lat: 0, lon: 0 };
         let currentMonsterGPS = { lat: 0, lon: 0 };
+        let joystickOffset = { x: 0, z: 0 }; // Untuk pergerakan manual
         let isSystemReady = false;
 
         function toggleFullScreen() {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
-            } else {
-                if (document.exitFullscreen) { document.exitFullscreen(); }
-            }
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else document.exitFullscreen();
         }
 
         async function requestGPSSystem() {
@@ -126,10 +129,33 @@
                 });
                 document.getElementById('boot-screen').style.display = 'none';
                 document.getElementById('game-ui').style.display = 'flex';
+                initJoystick();
                 initGameLogic();
             } catch (err) {
-                alert("Gagal memuat sensor: " + err.message);
+                alert("Izin sensor diperlukan!");
             }
+        }
+
+        // Inisialisasi Joystick nipplejs
+        function initJoystick() {
+            const options = {
+                zone: document.getElementById('joystick-zone'),
+                mode: 'static',
+                position: { left: '50%', top: '50%' },
+                color: 'green',
+                size: 100
+            };
+            const manager = nipplejs.create(options);
+
+            manager.on('move', (evt, data) => {
+                const speed = 0.000005; // Kecepatan simulasi GPS
+                const angle = data.angle.radian;
+                const force = data.force;
+                
+                // Update offset untuk memanipulasi posisi GPS
+                joystickOffset.x += Math.cos(angle) * force * speed;
+                joystickOffset.z += Math.sin(angle) * force * speed;
+            });
         }
 
         function initGameLogic() {
@@ -159,14 +185,16 @@
         }
 
         function updateUserPosition(position) {
-            userGPS.lat = position.coords.latitude;
-            userGPS.lon = position.coords.longitude;
-            if (currentMonsterGPS.lat === 0) { spawnNextTarget(); }
+            // Posisi User = GPS Asli + Manipulasi Joystick
+            userGPS.lat = position.coords.latitude + joystickOffset.z;
+            userGPS.lon = position.coords.longitude + joystickOffset.x;
+            
+            if (currentMonsterGPS.lat === 0) spawnNextTarget();
             updateVisuals();
         }
 
         function spawnNextTarget() {
-            let offset = 0.00018; // Sekitar 18-20 meter
+            let offset = 0.0002; // Spawn sekitar 20 meter dari titik awal
             currentMonsterGPS.lat = userGPS.lat + (Math.random() - 0.5) * offset;
             currentMonsterGPS.lon = userGPS.lon + (Math.random() - 0.5) * offset;
             
@@ -178,6 +206,8 @@
 
         function updateVisuals() {
             if (!isSystemReady || capturedTodayCount >= 5) return;
+            
+            // Konversi GPS ke Koordinat Lokal A-Frame
             let deltaY = (currentMonsterGPS.lat - userGPS.lat) * 111320;
             let deltaX = (currentMonsterGPS.lon - userGPS.lon) * 111320 * Math.cos(userGPS.lat * Math.PI / 180);
             
@@ -187,7 +217,7 @@
             let distance = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
             document.getElementById('distance-info').innerText = `${distance.toFixed(1)} METER`;
 
-            if (distance < 6 && window.navigator.vibrate) { window.navigator.vibrate(200); }
+            if (distance < 5 && window.navigator.vibrate) window.navigator.vibrate(100);
         }
 
         function attemptCapture() {
@@ -196,16 +226,16 @@
                 capturedTodayCount++;
                 localStorage.setItem('monster_hunt_captured_today', capturedTodayCount);
                 if (capturedTodayCount < 5) {
-                    alert("TERTANGKAP! Mencari target berikutnya...");
+                    alert("TARGET TERKUNCI! Mencari sinyal berikutnya...");
                     currentMonsterGPS.lat = 0;
                 } else {
                     localStorage.setItem('monster_hunt_day', currentDay + 1);
-                    alert("SEMUA TARGET HARI INI TERTANGKAP!");
+                    alert("MISI SELESAI! Seluruh target hari ini telah dimusnahkan.");
                     location.reload();
                 }
                 setupLevelUI();
             } else {
-                alert("MELESET! Target harus di tengah crosshair.");
+                alert("GAGAL! Target berada di luar jangkauan radar.");
             }
         }
     </script>
