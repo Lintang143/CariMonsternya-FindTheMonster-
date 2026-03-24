@@ -3,22 +3,21 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>30 Days Monster Hunter AR</title>
+    <title>GPS Haunted Forest - 5 Targets/Day</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-look-controls.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; background: #000; color: #0f0; }
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; background: #050505; }
         
-        /* Layar Awal (Wajib ada klik user agar pop-up izin muncul) */
         #boot-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            background: #000; color: #f00; z-index: 9999; display: flex; flex-direction: column;
             align-items: center; justify-content: center; text-align: center;
         }
         .btn-boot {
-            padding: 20px 40px; background: #0f0; color: #000; border: none;
+            padding: 20px 40px; background: #900; color: #fff; border: 2px solid white;
             font-weight: bold; cursor: pointer; border-radius: 5px; font-size: 1.2em;
-            box-shadow: 0 0 15px #0f0;
+            box-shadow: 0 0 20px #f00;
         }
 
         /* UI Game */
@@ -26,132 +25,234 @@
             position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             pointer-events: none; z-index: 10; display: none; flex-direction: column; align-items: center; 
         }
-        .status-bar {
-            margin-top: 20px; background: rgba(0, 0, 0, 0.85); color: #0f0; 
+        .status-panel {
+            margin-top: 20px; background: rgba(0, 0, 0, 0.9); color: #0f0; 
             padding: 15px; border: 2px solid #0f0; border-radius: 5px; text-align: center;
-            pointer-events: auto; width: 80%;
+            pointer-events: auto; width: 85%;
         }
-        #scan-label {
-            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0,0,0,0.8); color: white; padding: 20px; text-align: center;
-            border-radius: 10px; width: 70%; z-index: 11;
-        }
+        #distance-info { font-size: 1.2em; font-weight: bold; color: #f00; text-shadow: 0 0 10px #f00; }
+        #target-count { font-size: 0.8em; color: #aaa; margin-top: 5px; }
+        
         .btn-capture {
             position: fixed; bottom: 40px; padding: 20px 50px; 
             background: radial-gradient(circle, #ff0000, #660000); color: white; 
             border: 3px solid white; border-radius: 50px; font-weight: bold;
             cursor: pointer; z-index: 100; pointer-events: auto; display: none;
         }
-        #progress-container { width: 100%; background: #333; height: 10px; margin-top: 10px; }
-        #progress-bar { width: 0%; background: #0f0; height: 100%; transition: width 0.3s; }
     </style>
 </head>
 
 <body>
     <div id="boot-screen">
-        <h2 style="margin-bottom: 30px;">SYSTEM INITIALIZATION...</h2>
-        <button class="btn-boot" onclick="requestAccess()">AKTIFKAN MODUL RADAR</button>
-        <p style="margin-top: 20px; font-size: 0.8em;">Gunakan HTTPS & Izinkan Kamera</p>
+        <h1 style="margin-bottom: 30px; letter-spacing: 3px;">HAUNTED FOREST</h1>
+        <p>Sistem membutuhkan GPS aktif & izin sensor gerak.<br>Disarankan bermain outdoor di tempat terbuka.</p>
+        <button class="btn-boot" onclick="requestGPSSystem()">AKTIFKAN SISTEM</button>
+        <p style="margin-top: 20px; font-size: 0.8em; color: #555;">HTTPS WAJIB</p>
     </div>
 
     <div class="ui-overlay" id="game-ui">
-        <div class="status-bar">
-            <div id="day-text">HARI 1 - LEVEL 1</div>
-            <div id="hint-text" style="font-size: 0.8em; color: #aaa;">Radar Memindai...</div>
-            <div id="progress-container"><div id="progress-bar"></div></div>
+        <div class="status-panel">
+            <div id="day-text">HARI 1 - LVL 1</div>
+            <div id="distance-info">MENCARI SINYAL GPS...</div>
+            <div id="target-count">TARGET: 1/5 Tertangkap</div>
         </div>
-        <div id="scan-label"><b>KALIBRASI AREA</b><br>Gerakkan HP ke lantai rumah (titik putih akan muncul).</div>
         <button id="btn-capture" class="btn-capture" onclick="attemptCapture()">TANGKAP!</button>
     </div>
 
-    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: true; trackingMethod: best;" vr-mode-ui="enabled: false">
-        <a-entity id="monster-model" 
+    <a-scene vr-mode-ui="enabled: false" fog="type: exponential; color: #0c0f0e; density: 0.08;">
+        <a-assets>
+            <img id="forest-360" src="https://raw.githubusercontent.com/mrdoob/three.js/dev/examples/textures/2k_dark_forest.jpg">
+        </a-assets>
+
+        <a-sky id="background" src="#forest-360" material="opacity: 0.8;"></a-sky>
+        
+        <a-grid position="0 -1.6 0" material="color: #030; opacity: 0.2;"></a-grid>
+
+        <a-entity id="monster-target" 
                   gltf-model="" 
-                  scale="0.5 0.5 0.5" 
+                  scale="1.5 1.5 1.5" 
                   visible="false"
                   class="targetable"
-                  animation="property: rotation; to: 0 360 0; loop: true; dur: 8000">
+                  animation="property: rotation; to: 0 360 0; loop: true; dur: 12000">
         </a-entity>
-        <a-entity camera>
-            <a-entity raycaster="objects: .targetable; far: 50" cursor="rayOrigin: mouse; fuse: false"></a-entity>
+
+        <a-entity camera look-controls>
+            <a-entity raycaster="objects: .targetable; far: 100" cursor="rayOrigin: mouse; fuse: false"></a-entity>
         </a-entity>
     </a-scene>
 
     <script>
-        const monsterFiles = ["new_sirenhead.glb", "horror_skunx_cartoon_cat.glb", "huggy_wuggy_stylized.glb"];
-        let currentDay = parseInt(localStorage.getItem('monster_hunt_day')) || 1;
-        let lastPlayed = localStorage.getItem('monster_hunt_last_date');
+        const monsterFiles = [
+            "new_sirenhead.glb", "horror_skunx_cartoon_cat.glb", "huggy_wuggy_stylized.glb"
+        ];
 
-        // FUNGSI UTAMA: Minta izin kamera & sensor
-        async function requestAccess() {
+        // State Progres (LocalStorage)
+        let currentDay = parseInt(localStorage.getItem('monster_hunt_day')) || 1;
+        let lastDate = localStorage.getItem('monster_hunt_last_date');
+        
+        // Data Perburuan Harian (5 Monster)
+        let dailyTargets = JSON.parse(localStorage.getItem('monster_hunt_targets')) || [];
+        let capturedTodayCount = parseInt(localStorage.getItem('monster_hunt_captured_today')) || 0;
+
+        let userGPS = { lat: 0, lon: 0 };
+        let currentMonsterGPS = { lat: 0, lon: 0 };
+        let isSystemReady = false;
+
+        async function requestGPSSystem() {
             try {
-                // Minta izin kamera manual
-                await navigator.mediaDevices.getUserMedia({ video: true });
-                
-                // Minta izin sensor gerak (untuk HP baru)
+                // Izin Sensor Gerak
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                     await DeviceOrientationEvent.requestPermission();
                 }
 
+                // Cek Izin GPS
+                await new Promise((resolve, reject) => {
+                    navigator.geolocation.getCurrentPosition(resolve, reject);
+                });
+
                 document.getElementById('boot-screen').style.display = 'none';
                 document.getElementById('game-ui').style.display = 'flex';
-                initGame();
+                initGameLogic();
             } catch (err) {
-                alert("Izin Ditolak! Cek pengaturan kamera di browser Anda.");
+                alert("Sistem Gagal Aktif! Cek izin GPS & Sensor di browser. Gunakan HTTPS.");
                 console.error(err);
             }
         }
 
-        function initGame() {
+        function initGameLogic() {
             const today = new Date().toDateString();
-            if (lastPlayed === today) {
-                document.getElementById('scan-label').innerHTML = "<b style='color:red'>AREA BERSIH</b><br>Kembali lagi besok.";
+            
+            // 1. Cek Hari Baru
+            if (lastDate !== today) {
+                // Reset Progres Harian
+                dailyTargets = getRandomMonsters(5);
+                capturedTodayCount = 0;
+                
+                localStorage.setItem('monster_hunt_targets', JSON.stringify(dailyTargets));
+                localStorage.setItem('monster_hunt_captured_today', 0);
+                localStorage.setItem('monster_hunt_last_date', today);
+            }
+
+            // 2. Cek Jika Semua 5 Monster Sudah Tertangkap Hari Ini
+            if (capturedTodayCount >= 5) {
+                document.getElementById('distance-info').innerText = "AREA BERSIH";
+                document.getElementById('day-text').innerText = `HARI ${currentDay}`;
+                document.getElementById('target-count').innerText = "Semua target hari ini sudah diamankan.";
                 return;
             }
 
-            let level = Math.floor((currentDay - 1) / 30) + 1;
-            if (level > 10) level = 10;
-            document.getElementById('day-text').innerText = `HARI ${currentDay} - LEVEL ${level}`;
+            // 3. Setup Level & Target Pertama
+            setupLevelUI();
             
-            const modelIndex = (currentDay - 1) % monsterFiles.length;
-            document.getElementById('monster-model').setAttribute('gltf-model', `assets/${monsterFiles[modelIndex]}`);
-
-            let progress = 0;
-            let interval = setInterval(() => {
-                progress += Math.random() * 4;
-                document.getElementById('progress-bar').style.width = progress + "%";
-                if (progress >= 100) {
-                    clearInterval(interval);
-                    finishScan(level);
-                }
-            }, 500);
+            // 4. Mulai Lacak GPS
+            isSystemReady = true;
+            navigator.geolocation.watchPosition(updateUserPosition, handleGPSError, {
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 5000
+            });
         }
 
-        function finishScan(level) {
-            document.getElementById('scan-label').style.display = "none";
-            document.getElementById('btn-capture').style.display = "block";
+        function setupLevelUI() {
+            let level = Math.floor((currentDay - 1) / 30) + 1;
+            if (level > 10) level = 10;
+            document.getElementById('day-text').innerText = `HARI ${currentDay} - LVL ${level}`;
+            document.getElementById('target-count').innerText = `TARGET: ${capturedTodayCount + 1}/5 Tertangkap`;
+        }
+
+        // Fungsi Ambil 5 Monster Acak
+        function getRandomMonsters(count) {
+            let shuffled = monsterFiles.sort(() => 0.5 - Math.random());
+            return shuffled.slice(0, count);
+        }
+
+        function updateUserPosition(position) {
+            userGPS.lat = position.coords.latitude;
+            userGPS.lon = position.coords.longitude;
             
-            const monster = document.getElementById('monster-model');
-            let radius = 3 + (level * 2); 
-            let randomX = (Math.random() - 0.5) * radius;
-            let randomZ = -(Math.random() * radius + 2);
-            
-            // Spawn di koordinat statis agar tidak ngikutin kamera
-            monster.setAttribute('position', `${randomX} -1.6 ${randomZ}`);
+            // Jika target belum diletakkan di GPS, letakkan target pertama
+            if (currentMonsterGPS.lat === 0) {
+                spawnNextTarget();
+            } else {
+                updateVisuals();
+            }
+        }
+
+        function spawnNextTarget() {
+            // Letakkan monster di koordinat GPS acak di sekitar user (~10-20 meter)
+            let offset = 0.00015; // Sekitar 15 meter
+            currentMonsterGPS.lat = userGPS.lat + (Math.random() - 0.5) * offset;
+            currentMonsterGPS.lon = userGPS.lon + (Math.random() - 0.5) * offset;
+
+            // Load Model Target Hari Ini (Urutan ke `capturedTodayCount`)
+            const monster = document.getElementById('monster-target');
+            monster.setAttribute('gltf-model', `assets/${dailyTargets[capturedTodayCount]}`);
             monster.setAttribute('visible', 'true');
+            
+            document.getElementById('btn-capture').style.display = 'block';
+            updateVisuals();
+        }
+
+        function updateVisuals() {
+            if (!isSystemReady || capturedTodayCount >= 5) return;
+
+            // Hitung Jarak (Meter) - Jarak virtual disesuaikan dengan Level (Makin tinggi makin jauh)
+            let level = Math.floor((currentDay - 1) / 30) + 1;
+            
+            // Konversi GPS ke koordinat A-Frame (Sederhana: 1 deg ~ 111km)
+            let deltaY = (currentMonsterGPS.lat - userGPS.lat) * 111320;
+            let deltaX = (currentMonsterGPS.lon - userGPS.lon) * 111320 * Math.cos(userGPS.lat * Math.PI / 180);
+            
+            // Terapkan ke model (Z adalah kedalaman/utara-selatan)
+            const monster = document.getElementById('monster-target');
+            monster.setAttribute('position', `${deltaX} -1.6 ${-deltaY}`);
+
+            // Update Jarak UI & Efek Radar Getar
+            let distance = Math.sqrt(deltaX*deltaX + deltaY*deltaY);
+            document.getElementById('distance-info').innerText = `JARAK: ${distance.toFixed(1)} METER`;
+
+            // Efek Getar HP saat mendekat (Vibration API)
+            if (distance < 5 && window.navigator.vibrate) {
+                // Getar cepat jika sangat dekat
+                window.navigator.vibrate(200); 
+            } else if (distance < 15 && window.navigator.vibrate) {
+                // Getar lambat jika mulai mendekat
+                window.navigator.vibrate([100, 300, 100]);
+            }
         }
 
         function attemptCapture() {
             const raycaster = document.querySelector('[raycaster]').components.raycaster;
+            
+            // Logika: Hanya bisa ditangkap jika terlihat di kamera (kena raycast)
             if (raycaster.intersections.length > 0) {
-                localStorage.setItem('monster_hunt_day', currentDay + 1);
-                localStorage.setItem('monster_hunt_last_date', new Date().toDateString());
-                alert("BERHASIL! Monster dikurung.");
-                location.reload();
+                const monster = document.getElementById('monster-target');
+                monster.setAttribute('visible', 'false');
+                document.getElementById('btn-capture').style.display = 'none';
+                
+                // Getar Konfirmasi Tertangkap
+                if (window.navigator.vibrate) window.navigator.vibrate([100, 50, 500]);
+
+                capturedTodayCount++;
+                localStorage.setItem('monster_hunt_captured_today', capturedTodayCount);
+                
+                if (capturedTodayCount < 5) {
+                    // Target Berikutnya muncul di GPS baru
+                    alert(`BERHASIL! Target #${capturedTodayCount} diamankan. Mencari target #${capturedTodayCount + 1}...`);
+                    currentMonsterGPS.lat = 0; // Trigger spawn lokasi baru
+                } else {
+                    // Semua 5 tertangkap, kunci hari ini
+                    localStorage.setItem('monster_hunt_day', currentDay + 1);
+                    alert("SENSASIONAL! Hutan sudah aman untuk hari ini. Kembali lagi besok untuk target baru.");
+                    location.reload(); 
+                }
+                setupLevelUI();
             } else {
-                alert("MELESET! Target harus di tengah radar.");
+                alert("GAGAL! Target tidak terbidik tepat di tengah radar.");
             }
         }
+
+        function handleGPSError(err) { console.warn('GPS Error: ' + err.message); }
     </script>
 </body>
 </html>
