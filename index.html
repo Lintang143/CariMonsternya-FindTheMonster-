@@ -1,37 +1,105 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/aframe-ar@0.8.3/dist/aframe-ar.min.js"></script>
-  </head>
-  <body>
-    <a-scene webxr="optionalFeatures: hit-test, planes;">
-      <a-assets>
-        <a-asset-item id="sirenhead-model" src="path/to/sirenhead.glb"></a-asset-item>
-      </a-assets>
+<head>
+    <meta charset="utf-8">
+    <title>AR Monster Hunter - Random 30 Days</title>
+    <script src="https://aframe.io/releases/1.2.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .ui-overlay {
+            position: fixed; top: 20px; width: 100%; text-align: center; z-index: 1000;
+        }
+        .status-card {
+            background: rgba(0, 0, 0, 0.8); color: #0f0; border: 2px solid #0f0;
+            display: inline-block; padding: 15px; border-radius: 5px; text-transform: uppercase;
+        }
+        .btn-capture {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            padding: 15px 40px; background: red; color: white; border: none;
+            border-radius: 50px; font-weight: bold; cursor: pointer; z-index: 1000;
+        }
+    </style>
+</head>
 
-      <a-camera raycaster="objects: .clickable" cursor="fuse: false; rayOrigin: mouse;"></a-camera>
+<body>
 
-      <a-entity id="monster-target" 
-                gltf-model="#sirenhead-model" 
-                scale="0.5 0.5 0.5" 
-                position="2 0 -5" 
-                class="clickable"
-                visible="true">
-      </a-entity>
+    <div class="ui-overlay">
+        <div class="status-card">
+            <div id="day-text">HARI 1 - LEVEL 1</div>
+            <div id="hint-text" style="font-size: 0.8em; color: white;">Mencari Monster...</div>
+        </div>
+    </div>
 
-      <div style="position: fixed; top: 10px; width: 100%; text-align: center; z-index: 1000; color: white; font-family: sans-serif;">
-        <h1 id="status-text">HARI 1: TEMUKAN SIREN HEAD</h1>
-      </div>
+    <button class="btn-capture" onclick="nextDay()">TANGKAP & LANJUT</button>
+
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: false;">
+        <a-assets id="asset-container">
+            </a-assets>
+
+        <a-entity id="monster-spawn" 
+                  gltf-model="" 
+                  scale="0.5 0.5 0.5" 
+                  position="0 0 -5"
+                  animation="property: rotation; to: 0 360 0; loop: true; dur: 8000">
+        </a-entity>
+
+        <a-entity camera></a-entity>
     </a-scene>
 
     <script>
-      // Logika untuk mendeteksi jika monster "ditemukan" (diklik)
-      const monster = document.querySelector('#monster-target');
-      monster.addEventListener('click', function() {
-          alert('Monster Ditemukan! Menuju Hari Berikutnya...');
-          // Update database/localStorage untuk progres hari
-      });
+        // 1. DAFTAR FILE DI FOLDER ASSETS (Tinggal tambah namanya di sini)
+        const monsterFiles = [
+            "siren_head.glb",
+            "cartoon_cat.glb",
+            "huggy_wuggy.glb"
+            // Tambahkan terus sampai sebanyak yang kamu mau
+        ];
+
+        let currentDay = 1;
+        let currentLevel = 1;
+
+        function updateGame() {
+            // Hitung Level (Setiap 30 hari naik 1 level)
+            currentLevel = Math.floor((currentDay - 1) / 30) + 1;
+            if(currentLevel > 10) currentLevel = 10;
+
+            // Pilih monster secara acak dari list
+            const randomIndex = Math.floor(Math.random() * monsterFiles.length);
+            const selectedFile = `assets/${monsterFiles[randomIndex]}`;
+            
+            // Update UI
+            document.getElementById('day-text').innerText = `HARI ${currentDay} - LEVEL ${currentLevel}`;
+            document.getElementById('hint-text').innerText = `Target: ${monsterFiles[randomIndex].replace('.glb', '').replace('_', ' ')}`;
+
+            // Update Model AR
+            const monsterEntity = document.getElementById('monster-spawn');
+            monsterEntity.setAttribute('gltf-model', selectedFile);
+
+            // LOGIKA KESULITAN (Level 1-10)
+            // Semakin tinggi level, radius spawn semakin jauh dan acak
+            let radius = 3 + (currentLevel * 2); 
+            let randomX = (Math.random() - 0.5) * radius;
+            let randomZ = -(Math.random() * radius + 2);
+            let randomY = (Math.random() * 2) - 1; // Bisa melayang sedikit di level tinggi
+            
+            monsterEntity.setAttribute('position', `${randomX} ${randomY} ${randomZ}`);
+
+            // Efek Level Tinggi: Monster mengecil atau transparan
+            if (currentLevel > 5) {
+                monsterEntity.setAttribute('scale', '0.2 0.2 0.2');
+            }
+        }
+
+        function nextDay() {
+            currentDay++;
+            updateGame();
+            alert("Kerja bagus! Monster berhasil dikurung. Bersiap untuk hari berikutnya.");
+        }
+
+        // Jalankan saat pertama kali buka
+        window.onload = updateGame;
     </script>
-  </body>
+</body>
+</html>
 </html>
