@@ -183,6 +183,155 @@
     </script>
 </body>
 </html>
+        }
+
+        .btn-capture:active { transform: scale(0.9); background: #330000; }
+
+        /* Scan Progress Bar */
+        #progress-container { width: 100%; background: #333; height: 10px; margin-top: 10px; }
+        #progress-bar { width: 0%; background: #0f0; height: 100%; transition: width 0.3s; }
+    </style>
+</head>
+
+<body>
+    <div class="ui-overlay">
+        <div class="status-bar">
+            <div id="day-text">MENGHUBUNGKAN...</div>
+            <div id="hint-text" style="font-size: 0.8em; color: #aaa;">Mempersiapkan Radar...</div>
+            <div id="progress-container"><div id="progress-bar"></div></div>
+        </div>
+
+        <div id="scan-label">
+            <b>KALIBRASI AREA</b><br>
+            Berjalanlah perlahan sambil mengarahkan kamera ke lantai seluruh ruangan.
+        </div>
+
+        <button id="btn-capture" class="btn-capture" onclick="attemptCapture()">TANGKAP!</button>
+    </div>
+
+    <a-scene 
+        webxr="requiredFeatures: hit-test, planes; optionalFeatures: dom-overlay; overlayElement: .ui-overlay;"
+        embedded arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;">
+        
+        <a-assets>
+            </a-assets>
+
+        <a-entity id="monster-container">
+            <a-entity id="monster-model" 
+                      gltf-model="" 
+                      scale="0.5 0.5 0.5" 
+                      visible="false"
+                      class="targetable"
+                      animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
+            </a-entity>
+        </a-entity>
+
+        <a-entity camera>
+            <a-entity raycaster="objects: .targetable; far: 50" 
+                      cursor="rayOrigin: mouse; fuse: false"
+                      position="0 0 -1">
+            </a-entity>
+        </a-entity>
+    </a-scene>
+
+    <script>
+        const monsterFiles = [
+            "new_sirenhead.glb",
+            "horror_skunx_cartoon_cat.glb",
+            "huggy_wuggy_stylized.glb"
+            // Tambahkan file lainnya di sini
+        ];
+
+        let currentDay = parseInt(localStorage.getItem('monster_hunt_day')) || 1;
+        let lastPlayed = localStorage.getItem('monster_hunt_last_date');
+        let scanProgress = 0;
+        let isMonsterSpawned = false;
+
+        function init() {
+            const today = new Date().toDateString();
+            
+            // 1. Cek Apakah Sudah Main Hari Ini (24 Jam Rule)
+            if (lastPlayed === today) {
+                document.getElementById('scan-label').innerHTML = "<b style='color:red'>AREA BERSIH</b><br>Kamu sudah menangkap monster hari ini. Kembali lagi besok.";
+                document.getElementById('hint-text').innerText = "Radar Off: Menunggu kemunculan baru.";
+                return;
+            }
+
+            // 2. Setup Level & Model
+            let level = Math.floor((currentDay - 1) / 30) + 1;
+            if (level > 10) level = 10;
+            
+            document.getElementById('day-text').innerText = `HARI ${currentDay} - LEVEL ${level}`;
+            const modelIndex = (currentDay - 1) % monsterFiles.length;
+            document.getElementById('monster-model').setAttribute('gltf-model', `assets/${monsterFiles[modelIndex]}`);
+            document.getElementById('hint-text').innerText = `Target Terdeteksi: ${monsterFiles[modelIndex].split('.')[0].replace(/_/g, ' ')}`;
+
+            // 3. Simulasi Scan Ruangan (Mengikuti luas rumah)
+            startScanning();
+        }
+
+        function startScanning() {
+            let interval = setInterval(() => {
+                scanProgress += Math.random() * 5;
+                if (scanProgress >= 100) {
+                    scanProgress = 100;
+                    clearInterval(interval);
+                    finishScanning();
+                }
+                document.getElementById('progress-bar').style.width = scanProgress + "%";
+            }, 400); // Kecepatan scan (bisa disesuaikan)
+        }
+
+        function finishScanning() {
+            document.getElementById('scan-label').style.display = "none";
+            document.getElementById('btn-capture').style.display = "block";
+            
+            // Letakkan monster di lantai rumah secara random
+            spawnMonster();
+        }
+
+        function spawnMonster() {
+            const monster = document.getElementById('monster-model');
+            let level = Math.floor((currentDay - 1) / 30) + 1;
+            
+            // Jarak spawn berdasarkan level (makin tinggi level, makin jauh/susah)
+            let radius = 3 + (level * 2); 
+            let randomX = (Math.random() - 0.5) * radius;
+            let randomZ = -(Math.random() * radius + 2);
+            
+            // Posisi Y -1.6 agar menapak di lantai (asumsi tinggi kamera 1.6m)
+            monster.setAttribute('position', `${randomX} -1.6 ${randomZ}`);
+            monster.setAttribute('visible', 'true');
+            isMonsterSpawned = true;
+        }
+
+        function attemptCapture() {
+            if (!isMonsterSpawned) return;
+
+            const raycaster = document.querySelector('[raycaster]').components.raycaster;
+            const intersections = raycaster.intersections;
+
+            // Logika: Hanya bisa tangkap jika model terlihat di kamera (kena raycast)
+            if (intersections.length > 0) {
+                const today = new Date().toDateString();
+                
+                // Simpan Progres
+                localStorage.setItem('monster_hunt_day', currentDay + 1);
+                localStorage.setItem('monster_hunt_last_date', today);
+                
+                alert("SENSASIONAL! Monster berhasil diamankan ke dimensi lain.");
+                location.reload(); 
+            } else {
+                // Getar atau alert jika meleset
+                if (window.navigator.vibrate) window.navigator.vibrate(200);
+                alert("GAGAL! Monster tidak dalam jangkauan radar. Cari lebih teliti!");
+            }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>
         <a-assets id="asset-container">
             </a-assets>
 
