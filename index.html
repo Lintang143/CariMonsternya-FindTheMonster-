@@ -3,135 +3,153 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>30 Days Monster AR - Fixed SLAM</title>
+    <title>30 Days Monster Hunter AR</title>
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
     <style>
-        body { margin: 0; overflow: hidden; font-family: monospace; background: #000; }
-        #overlay {
+        body { margin: 0; overflow: hidden; font-family: 'Courier New', monospace; background: #000; color: #0f0; }
+        
+        /* Layar Awal (Wajib ada klik user agar pop-up izin muncul) */
+        #boot-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            background: rgba(0,0,0,0.9); color: #0f0; z-index: 9999; text-align: center;
+            background: #000; z-index: 9999; display: flex; flex-direction: column;
+            align-items: center; justify-content: center; text-align: center;
         }
-        .ui-game {
-            position: fixed; top: 20px; width: 100%; text-align: center; 
-            z-index: 100; color: white; pointer-events: none; display: none;
+        .btn-boot {
+            padding: 20px 40px; background: #0f0; color: #000; border: none;
+            font-weight: bold; cursor: pointer; border-radius: 5px; font-size: 1.2em;
+            box-shadow: 0 0 15px #0f0;
+        }
+
+        /* UI Game */
+        .ui-overlay { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            pointer-events: none; z-index: 10; display: none; flex-direction: column; align-items: center; 
+        }
+        .status-bar {
+            margin-top: 20px; background: rgba(0, 0, 0, 0.85); color: #0f0; 
+            padding: 15px; border: 2px solid #0f0; border-radius: 5px; text-align: center;
+            pointer-events: auto; width: 80%;
+        }
+        #scan-label {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8); color: white; padding: 20px; text-align: center;
+            border-radius: 10px; width: 70%; z-index: 11;
         }
         .btn-capture {
-            position: fixed; bottom: 40px; left: 50%; transform: translateX(-50%);
-            padding: 20px 40px; background: red; color: white; border: 2px solid white;
-            border-radius: 50px; font-weight: bold; display: none; z-index: 100;
+            position: fixed; bottom: 40px; padding: 20px 50px; 
+            background: radial-gradient(circle, #ff0000, #660000); color: white; 
+            border: 3px solid white; border-radius: 50px; font-weight: bold;
+            cursor: pointer; z-index: 100; pointer-events: auto; display: none;
         }
-        #scan-msg { position: fixed; top: 50%; width: 100%; text-align: center; color: #fff; z-index: 50; }
+        #progress-container { width: 100%; background: #333; height: 10px; margin-top: 10px; }
+        #progress-bar { width: 0%; background: #0f0; height: 100%; transition: width 0.3s; }
     </style>
 </head>
+
 <body>
-
-    <div id="overlay">
-        <h1>RADAR INITIALIZED</h1>
-        <p>Gunakan Chrome di Android & koneksi HTTPS.<br>Gerakkan HP untuk memetakan lantai.</p>
-        <button onclick="startExperience()" style="padding: 15px 30px; background: #0f0; border: none; font-weight: bold;">START RADAR</button>
+    <div id="boot-screen">
+        <h2 style="margin-bottom: 30px;">SYSTEM INITIALIZATION...</h2>
+        <button class="btn-boot" onclick="requestAccess()">AKTIFKAN MODUL RADAR</button>
+        <p style="margin-top: 20px; font-size: 0.8em;">Gunakan HTTPS & Izinkan Kamera</p>
     </div>
 
-    <div class="ui-game" id="ui">
-        <h2 id="day-text">HARI 1</h2>
-        <div id="progress-text">Scanning Area: 0%</div>
+    <div class="ui-overlay" id="game-ui">
+        <div class="status-bar">
+            <div id="day-text">HARI 1 - LEVEL 1</div>
+            <div id="hint-text" style="font-size: 0.8em; color: #aaa;">Radar Memindai...</div>
+            <div id="progress-container"><div id="progress-bar"></div></div>
+        </div>
+        <div id="scan-label"><b>KALIBRASI AREA</b><br>Gerakkan HP ke lantai rumah (titik putih akan muncul).</div>
+        <button id="btn-capture" class="btn-capture" onclick="attemptCapture()">TANGKAP!</button>
     </div>
 
-    <div id="scan-msg" style="display:none;">Gerakkan kamera ke arah lantai sampai monster muncul...</div>
-
-    <button id="btn-capture" class="btn-capture" onclick="captureMonster()">TANGKAP!</button>
-
-    <a-scene 
-        webxr="requiredFeatures: hit-test, planes; optionalFeatures: dom-overlay; overlayElement: #ui;"
-        embedded vr-mode-ui="enabled: false">
-        
-        <a-assets>
-            </a-assets>
-
-        <a-entity id="reticle" visible="false">
-            <a-ring color="#0f0" rotation="-90 0 0" radius-inner="0.1" radius-outer="0.15"></a-ring>
-        </a-entity>
-
-        <a-entity id="monster" 
+    <a-scene embedded arjs="sourceType: webcam; debugUIEnabled: true; trackingMethod: best;" vr-mode-ui="enabled: false">
+        <a-entity id="monster-model" 
                   gltf-model="" 
                   scale="0.5 0.5 0.5" 
                   visible="false"
                   class="targetable"
-                  animation="property: rotation; to: 0 360 0; loop: true; dur: 10000">
+                  animation="property: rotation; to: 0 360 0; loop: true; dur: 8000">
         </a-entity>
-
         <a-entity camera>
-            <a-entity raycaster="objects: .targetable; far: 50" cursor="rayOrigin: mouse;"></a-entity>
+            <a-entity raycaster="objects: .targetable; far: 50" cursor="rayOrigin: mouse; fuse: false"></a-entity>
         </a-entity>
     </a-scene>
 
     <script>
-        const monsters = ["new_sirenhead.glb", "horror_skunx_cartoon_cat.glb", "huggy_wuggy_stylized.glb"];
-        let day = parseInt(localStorage.getItem('monster_hunt_day')) || 1;
+        const monsterFiles = ["new_sirenhead.glb", "horror_skunx_cartoon_cat.glb", "huggy_wuggy_stylized.glb"];
+        let currentDay = parseInt(localStorage.getItem('monster_hunt_day')) || 1;
         let lastPlayed = localStorage.getItem('monster_hunt_last_date');
-        let progress = 0;
 
-        function startExperience() {
-            document.getElementById('overlay').style.display = 'none';
-            document.getElementById('ui').style.display = 'block';
-            document.getElementById('scan-msg').style.display = 'block';
-            initGame();
+        // FUNGSI UTAMA: Minta izin kamera & sensor
+        async function requestAccess() {
+            try {
+                // Minta izin kamera manual
+                await navigator.mediaDevices.getUserMedia({ video: true });
+                
+                // Minta izin sensor gerak (untuk HP baru)
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    await DeviceOrientationEvent.requestPermission();
+                }
+
+                document.getElementById('boot-screen').style.display = 'none';
+                document.getElementById('game-ui').style.display = 'flex';
+                initGame();
+            } catch (err) {
+                alert("Izin Ditolak! Cek pengaturan kamera di browser Anda.");
+                console.error(err);
+            }
         }
 
         function initGame() {
             const today = new Date().toDateString();
             if (lastPlayed === today) {
-                alert("Area aman. Kembali lagi besok!");
+                document.getElementById('scan-label').innerHTML = "<b style='color:red'>AREA BERSIH</b><br>Kembali lagi besok.";
                 return;
             }
 
-            document.getElementById('day-text').innerText = `HARI ${day} - LEVEL ${Math.floor((day-1)/30)+1}`;
+            let level = Math.floor((currentDay - 1) / 30) + 1;
+            if (level > 10) level = 10;
+            document.getElementById('day-text').innerText = `HARI ${currentDay} - LEVEL ${level}`;
             
-            // Pilih model
-            const modelFile = monsters[(day-1) % monsters.length];
-            document.getElementById('monster').setAttribute('gltf-model', `assets/${modelFile}`);
+            const modelIndex = (currentDay - 1) % monsterFiles.length;
+            document.getElementById('monster-model').setAttribute('gltf-model', `assets/${monsterFiles[modelIndex]}`);
 
-            // Simulasi Progress Scan
-            let timer = setInterval(() => {
-                progress += Math.random() * 5;
-                document.getElementById('progress-text').innerText = `Scanning Area: ${Math.floor(progress)}%`;
-                
+            let progress = 0;
+            let interval = setInterval(() => {
+                progress += Math.random() * 4;
+                document.getElementById('progress-bar').style.width = progress + "%";
                 if (progress >= 100) {
-                    clearInterval(timer);
-                    document.getElementById('progress-text').innerText = "STATUS: TARGET DETECTED!";
-                    spawnMonsterInWorld();
+                    clearInterval(interval);
+                    finishScan(level);
                 }
-            }, 400);
+            }, 500);
         }
 
-        function spawnMonsterInWorld() {
-            document.getElementById('scan-msg').style.display = 'none';
-            document.getElementById('btn-capture').style.display = 'block';
-
-            const monster = document.getElementById('monster');
+        function finishScan(level) {
+            document.getElementById('scan-label').style.display = "none";
+            document.getElementById('btn-capture').style.display = "block";
             
-            // Pola Level: Radius acak menjauh setiap level
-            let level = Math.floor((day-1)/30)+1;
-            let radius = 2 + (level * 2);
-            let angle = Math.random() * Math.PI * 2;
+            const monster = document.getElementById('monster-model');
+            let radius = 3 + (level * 2); 
+            let randomX = (Math.random() - 0.5) * radius;
+            let randomZ = -(Math.random() * radius + 2);
             
-            let x = Math.cos(angle) * radius;
-            let z = Math.sin(angle) * radius;
-
-            // KUNCI: Posisi ditaruh di World Space (bukan relatif ke kamera)
-            monster.setAttribute('position', `${x} -1.6 ${z}`); 
+            // Spawn di koordinat statis agar tidak ngikutin kamera
+            monster.setAttribute('position', `${randomX} -1.6 ${randomZ}`);
             monster.setAttribute('visible', 'true');
         }
 
-        function captureMonster() {
+        function attemptCapture() {
             const raycaster = document.querySelector('[raycaster]').components.raycaster;
             if (raycaster.intersections.length > 0) {
-                localStorage.setItem('monster_hunt_day', day + 1);
+                localStorage.setItem('monster_hunt_day', currentDay + 1);
                 localStorage.setItem('monster_hunt_last_date', new Date().toDateString());
-                alert("SUKSES! Monster tertangkap.");
+                alert("BERHASIL! Monster dikurung.");
                 location.reload();
             } else {
-                alert("GAGAL! Monster tidak ada dalam bidikan radar.");
+                alert("MELESET! Target harus di tengah radar.");
             }
         }
     </script>
